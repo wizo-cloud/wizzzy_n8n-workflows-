@@ -1,5 +1,5 @@
 ## Workflow Overview
-![AI Lead Qualification Workflow](Screenshot%20From%202026-04-05%2017-33-55.png)
+![AI Lead Qualification Workflow](Screenshot%20From%202026-04-06%2021-20-08.png)
 
 ## Live Demo
 [👉 View the Lead Capture Form](https://wizo-cloud.github.io/wizzzy_n8n-workflows-/)
