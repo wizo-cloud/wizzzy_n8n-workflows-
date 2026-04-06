@@ -1,6 +1,9 @@
 ## Workflow Overview
 ![AI Lead Qualification Workflow](Screenshot%20From%202026-04-05%2017-33-55.png)
 
+## Live Demo
+[👉 View the Lead Capture Form](https://wizo-cloud.github.io/wizzzy_n8n-workflows-/)
+
 🤖 AI Lead Qualification System — n8n + Gemini + Google Sheets + Slack + Gmail
 
 Stop letting good leads go cold while your team manually sorts through tyre-kickers.
