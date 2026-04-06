@@ -1,3 +1,6 @@
+## Workflow Overview
+![AI Lead Qualification Workflow](Screenshot%20From%202026-04-05%2017-33-55.png)
+
 🤖 AI Lead Qualification System — n8n + Gemini + Google Sheets + Slack + Gmail
 
 Stop letting good leads go cold while your team manually sorts through tyre-kickers.
