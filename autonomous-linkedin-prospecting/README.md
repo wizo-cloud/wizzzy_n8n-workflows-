@@ -23,6 +23,16 @@ This system **eliminates manual prospecting entirely.** It runs on a schedule, f
 
 You wake up to a Slack notification: *"3 high-value leads found and contacted."*
 
+## 🔗 Try It Live
+
+👉 [Launch the LinkedIn Prospecting Form](https://n8n.srv1290655.hstgr.cloud/form/ca7f4927-5817-411e-b630-9796aed1c9d2)
+
+Enter a LinkedIn search URL and watch the system qualify and score leads automatically.
+
+---
+
+![Workflow Screenshot](<Screenshot From 2026-04-07 10-47-53.png>)
+
 ---
 
 ## 🚀 What This System Does
@@ -48,6 +58,8 @@ This workflow autonomously:
 | **Gmail** | Personalized outreach emails |
 | **Slack** | Real-time team notifications |
 
+---
+
 
 ## ✨ Key Features
 
@@ -57,6 +69,7 @@ This workflow autonomously:
 - **Real-time Alerts** — Slack notifications fire instantly when a hot lead is found
 - **Full Audit Trail** — Every lead, score, and action is logged to Google Sheets
 
+---
 
 
 ## ⚙️ Setup Instructions
