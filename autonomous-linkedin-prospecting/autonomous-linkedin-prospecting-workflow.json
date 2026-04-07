@@ -1,0 +1,957 @@
+{
+  "name": "Autonomous LinkedIn Prospecting & Lead Intelligence System.",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -528
+      ],
+      "id": "d2ff4e61-3d9c-4611-ae47-18a1b5cefc2d",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "dusljp0UcdcKswOJ",
+          "name": "BML Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $execution.id }}",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        208,
+        -512
+      ],
+      "id": "aa669a41-6945-45e0-b026-2ac0d38f7c12",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Please generate a personalized outreach package for the following lead:\n\n- Full Name: {{ $json['Full name'] }}\n- Headline: {{ $json.headline }}\n- About/Bio: {{ $json['About '] }}\n- Email: {{ $json.Email }}\nUsing the persona of a Senior Lead Intelligence Agent, analyze their \"About\" section to find a specific \"Hook.\"\n\nThen, provide the response in the required JSON format including:\n1. The lead's full name.\n2. Their verified email.\n3. A personalized message.\n4. A 200-word (max) personalized message focused on how our Autonomous LinkedIn Systems can help someone with their specific title/mission.\n5. An \"outreach_readiness\" status based on whether the data was sufficient to create a high-quality hook.\n\n\n",
+        "options": {
+          "systemMessage": "= ROLE\nYou are the \"Senior Lead Intelligence & Strategic Prospecting Agent.\" Your expertise lies in analyzing B2B data and writing ultra-personalized outreach messages.\n\nCONTEXT\nYou are receiving scraped LinkedIn data (Full Name, Headline, About, Email). Your goal is to draft a high-conversion outreach message that feels personal, not automated.\n\nINSTRUCTIONS\n1. **Analyze:** Read the lead's \"About\" section and \"Headline\" to identify their core business mission.\n2. **The \"Hook\":** Start the message with a specific observation about their career or company. Avoid: \"I saw your profile.\" Use: \"I noticed your work on [Specific Project/Topic from About section].\"\n3. **The Value Proposition:** Briefly connect how our solution (Autonomous LinkedIn Systems) solves a pain point relevant to their job title.\n4. **The Call to Action (CTA):** End with a low-friction question (e.g., \"Worth a brief chat next week?\").\n5. Always use the think/brain tool  Use it for reasoning with chat model and give a better results\n\nOUTREACH CONSTRAINTS\n- Length: Maximum 100 words.\n- Tone: Peer-to-peer, professional, and helpful.\n- Language: Direct and clear. No corporate jargon.\n\nSPECIFIC OUTPUT SCHEMA (FOR CRM UPDATING)\n\n  \"full_name\" {{ $json['Full name'] }} :\n  \"verified_email\": \"{{ $json.Email }}\",\n  \"personalized_message\": \"string\",\n  \"subject_line\": \"string\",\n  \"outreach_readiness\": \"Ready | Needs Review\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        160,
+        -736
+      ],
+      "id": "9861b1cf-6b5c-4339-bdff-3bc169a71771",
+      "name": "Ai Agent"
+    },
+    {
+      "parameters": {
+        "description": "=Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed."
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolThink",
+      "typeVersion": 1.1,
+      "position": [
+        416,
+        -512
+      ],
+      "id": "91a8758e-549c-4dd0-a322-0d851878fc2a",
+      "name": "Brain"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.Email }}",
+        "subject": "={{ $json.Personalized_message }}\n",
+        "emailType": "text",
+        "message": "={{ $json.Personalized_message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        336,
+        48
+      ],
+      "id": "57ccd326-7b94-471b-8b18-ca2831a94972",
+      "name": "Send a message",
+      "webhookId": "2c31de21-776e-4add-9f44-f64bbfafd41a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZwB9mwK94MFGVuJZ",
+          "name": "gmail wizo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the output from the AI Agent node\nconst items = $input.all();\n\nconst results = items.map(item => {\n  let rawOutput = item.json.output;\n  \n  // Remove markdown code fences if present (```json ... ```)\n  rawOutput = rawOutput.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  \n  // Parse the cleaned JSON string\n  const parsed = JSON.parse(rawOutput);\n  \n  return {\n    json: {\n      full_name: parsed.full_name,\n      verified_email: parsed.verified_email,\n      personalized_message: parsed.personalized_message\n    }\n  };\n});\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        -736
+      ],
+      "id": "f1e9dda7-9034-42a7-8562-072fe7314e84",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if the scraped data has valid profile info\nconst items = $input.all();\nconst validItems = [];\nconst invalidItems = [];\n\nfor (const item of items) {\n  const basicInfo = item.json.basic_info;\n  \n  // If basic_info is missing or fullname is empty, it's an invalid profile\n  if (!basicInfo || !basicInfo.fullname || basicInfo.fullname.trim() === '') {\n    invalidItems.push(item);\n  } else {\n    validItems.push(item);\n  }\n}\n\n// If no valid items found, throw an error to route to error handler\nif (validItems.length === 0) {\n  throw new Error('No valid profile data returned - URL may be invalid or profile is private');\n}\n\nreturn validItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1040,
+        -704
+      ],
+      "id": "443dee3f-fe04-4858-8c60-cae3d40a7a5f",
+      "name": "Validate Profile Data",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM",
+          "mode": "list",
+          "cachedResultName": "Group 7 capstone project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1468188207,
+          "mode": "list",
+          "cachedResultName": "Sheet3",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit#gid=1468188207"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Full name": "={{ $('Data from Linkedin scraper').item.json.basic_info.fullname }}",
+            "headline": "={{ $('Data from Linkedin scraper').item.json.basic_info.headline }}",
+            "About ": "={{ $('Data from Linkedin scraper').item.json.basic_info.about }}",
+            "Location": "={{ $('Data from Linkedin scraper').item.json.basic_info.location.full }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Full name",
+              "displayName": "Full name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "headline",
+              "displayName": "headline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "About ",
+              "displayName": "About ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -752,
+        -480
+      ],
+      "id": "b2248699-2c82-45c2-b295-335210038919",
+      "name": "No Email Lead",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "U34ZH5PAKnCBIMGl",
+          "name": "Google Sheets wizo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "786389c3-69a0-4c3b-8968-2396cc8d7e97",
+              "leftValue": "={{ $json.basic_info.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -784,
+        -720
+      ],
+      "id": "ee0da255-099a-44ae-81bd-b18bb0db7c86",
+      "name": "IF"
+    },
+    {
+      "parameters": {
+        "sendTo": "wisdomokafor47@gmail.com",
+        "subject": "⚠️ Workflow Error - LinkedIn Scraper",
+        "message": "=Error: Invalid or unreachable LinkedIn URL - no profile data returned\nLinkedIn URL: {{ $('On form submission1').first().json['LinkedIn URL'] ?? 'URL not captured' }}\nTime: {{ $now }}\n\nPlease check the Errors sheet for details.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1488,
+        16
+      ],
+      "id": "e7e7d828-799a-4214-91dc-b4e509ddd093",
+      "name": "Message  to me",
+      "webhookId": "db9f3730-b9ec-46f8-9b2d-5e68c55a5908",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZwB9mwK94MFGVuJZ",
+          "name": "gmail wizo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "Linkedin URL",
+        "formDescription": "paste your URL here",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "LinkedIn URL",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -2000,
+        -688
+      ],
+      "id": "1f5090b6-fecc-4d10-ada3-cdd65f3e4232",
+      "name": "On form submission1",
+      "webhookId": "ca7f4927-5817-411e-b630-9796aed1c9d2",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "actorSource": "store",
+        "actorId": {
+          "__rl": true,
+          "value": "VhxlqQXRwhW8H5hNV",
+          "mode": "list",
+          "cachedResultName": "Profile Details Scraper for LinkedIn + EMAIL (No Cookies) (apimaestro/linkedin-profile-detail)",
+          "cachedResultUrl": "https://console.apify.com/actors/VhxlqQXRwhW8H5hNV/input"
+        },
+        "customBody": "={\n    \"username\": \"{{ $('On form submission1').item.json['LinkedIn URL'] }}\",\n    \"includeEmail\": true\n}",
+        "timeout": {}
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        -1712,
+        -688
+      ],
+      "id": "bcf743d4-efc1-4eee-b4dd-ed8f430ae01e",
+      "name": "Linkedin Scraper",
+      "credentials": {
+        "apifyApi": {
+          "id": "3obAXwjCafh6MKpM",
+          "name": "BML"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Input: LinkedIn URL from form submission\nOutput: Profile data (name, email, company, title)\nOn failure: Routes to error handler → logs to sheet + sends email alert\nCommon failures: Private profiles, rate limits, invalid URLs"
+    },
+    {
+      "parameters": {
+        "resource": "Datasets",
+        "datasetId": "={{ $node[\"Linkedin Scraper\"].json.defaultDatasetId }}",
+        "offset": {},
+        "options": {}
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        -1408,
+        -704
+      ],
+      "id": "13ec12b2-ea4f-4c01-9520-95ffe81fcffd",
+      "name": "Data from Linkedin scraper",
+      "credentials": {
+        "apifyApi": {
+          "id": "j5pnK161se57BY5h",
+          "name": "Apify account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM",
+          "mode": "list",
+          "cachedResultName": "Group 7 capstone project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1833318872,
+          "mode": "list",
+          "cachedResultName": "Sheet4",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit#gid=1833318872"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now }}",
+            "Workflow Name": "LinkedIn Scraper",
+            "Error Message": "={{ $json.error?.message ?? $json.errorMessage ?? $json.cause?.message ?? 'Invalid or unreachable LinkedIn URL - no profile data returned' }}",
+            "LinkedIn URL": "={{ $('On form submission1').first().json['LinkedIn URL'] ?? 'URL not captured' }}",
+            "Status": "Failed"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Workflow Name",
+              "displayName": "Workflow Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Error Message",
+              "displayName": "Error Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "LinkedIn URL",
+              "displayName": "LinkedIn URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1712,
+        16
+      ],
+      "id": "2d261cee-1164-42b9-8b2d-fa4b24ede4e5",
+      "name": "Invalid URL",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "U34ZH5PAKnCBIMGl",
+          "name": "Google Sheets wizo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM",
+          "mode": "list",
+          "cachedResultName": "Group 7 capstone project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Full name": "={{ $json.basic_info.fullname }}",
+            "headline": "={{ $json.basic_info.headline }}",
+            "About ": "={{ $json.basic_info.about }}",
+            "Location": "={{ $json.basic_info.location.full }}",
+            "Email": "={{ $json.basic_info.email }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Full name",
+              "displayName": "Full name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "headline",
+              "displayName": "headline",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "About ",
+              "displayName": "About ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -448,
+        -736
+      ],
+      "id": "23019450-4524-4d23-9ced-be577ce24206",
+      "name": "Data Collection",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "U34ZH5PAKnCBIMGl",
+          "name": "Google Sheets wizo"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        112,
+        48
+      ],
+      "id": "1c7749e0-1b7a-4959-a3ad-358c6518199d",
+      "name": "Pause",
+      "webhookId": "bdc135d2-a748-4f71-828d-1db077f3b518"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "wizo",
+          "mode": "name"
+        },
+        "text": "=⚠️ Workflow Error!  LinkedIn URL: {{ $('On form submission1').item.json['LinkedIn URL'] }} Time: {{ $now }}  Check the Errors sheet for details.",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        -1264,
+        16
+      ],
+      "id": "7d041da3-ad60-459c-bc30-1dcd84ea20a0",
+      "name": "Message for invalid URL",
+      "webhookId": "cd0232b6-08ff-49e6-a031-3310f2a8f44b",
+      "credentials": {
+        "slackApi": {
+          "id": "r3ZEOFko4Aqmij3O",
+          "name": "wizo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "wizo",
+          "mode": "name"
+        },
+        "text": "=New lead just came in!\n\n🔥 New High-Priority Lead!\n\n👤 Name: {{ $('Code').item.json.full_name }}\n📧 Email: {{ $('Code').item.json.verified_email }}\n📝 Message: {{ $('Code').item.json.personalized_message }}\n🕐 Time: {{ $now }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        592,
+        48
+      ],
+      "id": "276d0552-858f-466e-9bd9-7bfb2986f0ca",
+      "name": "Message for valid URL",
+      "webhookId": "9e6a89a1-1e1b-4e02-81d3-7bfa7ac90e07",
+      "credentials": {
+        "slackApi": {
+          "id": "r3ZEOFko4Aqmij3O",
+          "name": "wizo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "📋 WORKFLOW OVERVIEW\nThis workflow scrapes LinkedIn profiles,\nenriches leads with AI, and sends\npersonalized outreach emails automatically.",
+        "height": 400,
+        "width": 800,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2048,
+        -832
+      ],
+      "typeVersion": 1,
+      "id": "9db8f11e-fd7e-43d3-9c68-15e8afab4013",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "⚠️ ERROR HANDLING\nCatches invalid URLs and scraping failures.\nLogs to Sheet4 and alerts via Gmail + Slack.",
+        "height": 352,
+        "width": 1024,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1968,
+        -176
+      ],
+      "typeVersion": 1,
+      "id": "2317f69b-51de-477f-8b22-2c359e64bdf3",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "🔍 DATA COLLECTION\nScrapes LinkedIn profile data using Apify.\nValidates profile before proceeding.",
+        "height": 496,
+        "width": 960
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1152,
+        -848
+      ],
+      "typeVersion": 1,
+      "id": "1ab2a90e-a368-4aa8-8a05-59d0782294ac",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "🤖 AI ENRICHMENT\nGemini AI generates personalized outreach\nmessages based on profile data.",
+        "height": 400,
+        "width": 992,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -64,
+        -800
+      ],
+      "typeVersion": 1,
+      "id": "e5a8d1a8-c14e-4af9-b672-7f777584031a",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "📤 OUTPUT & NOTIFICATIONS\nSaves lead data to sheets and sends\npersonalized email + Slack alert to team.",
+        "height": 384,
+        "width": 976,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        -160
+      ],
+      "typeVersion": 1,
+      "id": "9fa09e53-7911-40df-a5ba-a11b2deaa312",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM",
+          "mode": "list",
+          "cachedResultName": "Group 7 capstone project",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1780926080,
+          "mode": "list",
+          "cachedResultName": "Sheet2",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Q7DY29Aond_EuCjy9cblfud1-6rNQHvVqheESBK_8VM/edit#gid=1780926080"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Full name": "={{ $json.full_name }}",
+            "Email": "={{ $json.verified_email }}",
+            "Personalized_message": "={{ $json.personalized_message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Full name",
+              "displayName": "Full name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Personalized_message",
+              "displayName": "Personalized_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        784,
+        -736
+      ],
+      "id": "7ee648a6-0315-4d58-bf06-b9b161524e96",
+      "name": "Data Insight",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "U34ZH5PAKnCBIMGl",
+          "name": "Google Sheets wizo"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Ai Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Ai Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ai Agent": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Brain": {
+      "ai_tool": [
+        [
+          {
+            "node": "Ai Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Message for valid URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Data Insight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Profile Data": {
+      "main": [
+        [
+          {
+            "node": "IF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF": {
+      "main": [
+        [
+          {
+            "node": "Data Collection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Email Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission1": {
+      "main": [
+        [
+          {
+            "node": "Linkedin Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linkedin Scraper": {
+      "main": [
+        [
+          {
+            "node": "Data from Linkedin scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data from Linkedin scraper": {
+      "main": [
+        [
+          {
+            "node": "Validate Profile Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalid URL": {
+      "main": [
+        [
+          {
+            "node": "Message  to me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Collection": {
+      "main": [
+        [
+          {
+            "node": "Ai Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message  to me": {
+      "main": [
+        [
+          {
+            "node": "Message for invalid URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Insight": {
+      "main": [
+        [
+          {
+            "node": "Pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "39382c1e-bfe7-40a8-b03e-33c0067be552",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b30b9f20ea58c340a69a11d8e9c4c1653d31d6f96c3ed45c60dce95ebcfcd276"
+  },
+  "id": "1lgMnsNwao6uEBLrNfAYe",
+  "tags": []
+}
