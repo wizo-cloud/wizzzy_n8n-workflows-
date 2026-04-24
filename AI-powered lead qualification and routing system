@@ -1,0 +1,154 @@
+# AI-Powered Lead Qualification & Routing System
+
+> Built with n8n · Google Gemini 2.5 Flash · Google Sheets · Slack · Gmail
+
+![Workflow Screenshot](./workflow-screenshot.png)
+---
+
+## The Problem
+
+Most businesses handling inbound leads run into the same wall.
+
+A form gets submitted. It lands in someone's inbox. That person reads it, tries to figure out if it's worth following up, writes a reply from scratch, then pastes the details into a spreadsheet — manually. Every time.
+
+At low volume, that's annoying. At scale, it breaks down completely. Leads sit uncontacted for hours. Hot prospects get the same generic reply as tyre-kickers. Sales teams spend more time sorting leads than actually selling.
+
+Four specific problems this system was built to fix:
+
+**1. No qualification at submission time**
+There's no way to know whether a new lead is serious or not until a human reads it and makes a judgment call. That takes time the business often doesn't have.
+
+**2. Generic responses**
+Every lead gets the same reply regardless of their intent. A high-budget prospect ready to buy gets the same "thanks for reaching out" as someone who filled out the form by accident.
+
+**3. No routing logic**
+High-intent leads should be escalated immediately. Nurture leads need a different sequence. Cold leads need to be politely declined without wasting sales time. Without routing, everyone goes into the same pile.
+
+**4. Manual logging**
+Someone has to copy lead data into a spreadsheet. That person makes mistakes, skips fields, or just doesn't do it. The CRM ends up incomplete.
+
+---
+
+## The Solution
+
+This n8n workflow handles the entire inbound lead process automatically — from form submission to qualified, routed, logged, and replied — with zero manual steps.
+
+### How It Works
+
+**Entry Point**
+The workflow triggers on form submission via webhook. A `Normalize & Pass Lead Data` node cleans and standardises the incoming fields. An IF node checks for required fields — incomplete submissions are logged separately as invalid and the workflow exits cleanly.
+
+**AI Qualification Engine**
+Valid leads go through a Human Buffer node (rate limiting), then into the core AI Agent powered by Google Gemini 2.5 Flash. The agent uses:
+- An **Internal Think Tool** to reason through the lead before scoring
+- A **Structured Output Parser** to enforce consistent JSON output
+- **Memory** for session context
+
+The agent scores every lead as `High Intent`, `Nurture`, or `Cold` with a confidence score and a reasoning summary. No hallucinated scores — the Think Tool forces the model to work through its reasoning before committing to an output.
+
+**Lead Logging**
+Every qualified lead is appended to Google Sheets immediately, regardless of score. The log includes the raw submission, the AI score, the tier classification, and a timestamp.
+
+**Lead Routing & Response**
+A Switch node reads the AI's classification and routes to the correct branch:
+
+| Tier | Action |
+|------|--------|
+| High Intent | Auto-Reply (warm, personalised) → Append to High Intent sheet |
+| Nurture | Auto-Reply (follow-up sequence) → Append to Nurture sheet |
+| Cold | Polite Decline email → Append to Cold sheet |
+
+Each branch sends the appropriate Gmail reply and appends the lead to the correct sheet tab.
+
+**Team Alerts**
+High-priority leads trigger an immediate Slack alert so the sales team can follow up personally. The sheet syncs every 120 seconds to keep the Slack notification current.
+
+**Error Handling**
+A global Error Trigger catches any workflow failure. It fires a Slack alert and a Gmail notification to the admin so broken executions don't go unnoticed.
+
+Invalid and unqualified leads are logged to a separate sheet rather than dropped — so nothing disappears silently.
+
+---
+
+## Tech Stack
+
+| Tool | Role |
+|------|------|
+| n8n | Workflow orchestration |
+| Google Gemini 2.5 Flash | Lead scoring & classification |
+| Internal Think Tool | Structured AI reasoning before output |
+| Structured Output Parser | Enforced JSON from Gemini |
+| Google Sheets | Lead logging (High Intent / Nurture / Cold tabs) |
+| Gmail | Auto-replies + error alerts |
+| Slack | High-priority lead alerts + error notifications |
+
+---
+
+## Workflow Map
+
+```
+Capture Lead Form
+    └── Normalize & Pass Lead Data
+            └── Required Fields Present?
+                    ├── NO  → Log Invalid Lead → Log Unqualified Lead (Sheets)
+                    └── YES → Human Buffer → AI Agent (Gemini + Think + Memory)
+                                    └── Extract AI Output
+                                            └── Switch (High / Nurture / Cold)
+                                                    ├── High Intent → Auto-Reply → Append Sheet
+                                                    ├── Nurture    → Auto-Reply → Append Sheet
+                                                    └── Cold       → Polite Decline → Append Sheet
+
+                                            └── Team Alert → Allow Sheet Sync → Slack Alert
+
+Error Trigger → Slack Alert → Gmail Error Alert
+```
+
+---
+
+## Setup
+
+### Prerequisites
+- Self-hosted or cloud n8n instance (v1.0+)
+- Google Cloud project with Gemini API enabled
+- Gmail account with OAuth credentials configured in n8n
+- Slack workspace with a bot token
+- Google Sheets with tabs: `High Intent` / `Nurture` / `Cold` / `Invalid`
+
+### Import Steps
+1. Download `lead-qualification-workflow.json` from this repo
+2. In n8n: open canvas → top-right menu → **Import from file**
+3. Connect credentials: Google Gemini · Gmail · Google Sheets · Slack
+4. Switch the Webhook node from **Test URL** to **Production URL**
+5. Run a test submission and verify all three routing branches fire correctly
+
+### Required Fields (default)
+The `Required Fields Present` IF node checks for:
+- `name`
+- `email`
+- `company`
+- `message`
+
+Edit the IF node conditions to match your actual form fields.
+
+---
+
+## Results
+
+- Lead response time: hours → under 2 minutes
+- Manual data entry: eliminated
+- Routing: three-tier classification runs consistently across all submissions
+- Invalid leads: logged separately, never silently dropped
+
+---
+
+## About
+
+Built by **Wizo (Okafor Wisdom)** — AI workflow automation developer based in Nigeria.
+
+I build n8n automation systems for SMBs: lead qualification, sales pipeline automation, client onboarding, and outreach infrastructure.
+
+- GitHub: [github.com/wizo-cloud/wizzzy_n8n-workflows-](https://github.com/wizo-cloud/wizzzy_n8n-workflows-)
+- Email: wisdomokafor47@gmail.com
+
+---
+
